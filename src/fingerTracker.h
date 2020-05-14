@@ -106,12 +106,13 @@ public:
 		: pm_(cv::Mat::eye(3, 3, CV_32F)),
 		isCalibMode_(false),
 		inputCamera_(NULL),
-		tuioServer_(new TUIO::TuioServer()),
 		pickOffset_(ofVec2f(0, 0)),
-		contourFinder_(new ofxCv::ContourFinder),
-		tracker_(new ofxCv::RectTrackerFollower<FingerFollower>()),
 		circularity_(0.25)
 	{
+		tuioServer_ = std::make_unique<TUIO::TuioServer>();
+		contourFinder_ = std::make_unique<ofxCv::ContourFinder>();
+		tracker_ = std::make_unique<ofxCv::RectTrackerFollower<FingerFollower>>();
+
 		tuioServer_->setSourceName("ofTracker");
 		tuioServer_->enableObjectProfile(false);
 		tuioServer_->enableBlobProfile(false);
@@ -133,29 +134,32 @@ public:
 			inputCamera_->Stop();
 	}
 
-	void getImage(ofImage& image) { ofxCv::toOf(resultImg_, image); }
+	void GetImage(ofImage& image) { 
+		lock();
+		ofxCv::toOf(resultImg_, image);
+		unlock();
+	}
 
 private:
 	void FingerTracker::threadedFunction()
 	{
-		contourFinder_->setAutoThreshold(false);
+		contourFinder_->setAutoThreshold(true);
 
 		while (isThreadRunning()) {
+			lock();
 			inputCamera_->Grab([this](cv::Mat img) {
 				cv::cvtColor(img, gray_, cv::COLOR_RGB2GRAY);
 				cv::warpPerspective(gray_, gray_, pm_, gray_.size(), cv::INTER_NEAREST);
 				cv::GaussianBlur(gray_, gray_, cv::Size(9, 9), 0, 0);
-				ofxCv::threshold(gray_, gray_, threshold_, false);
 
-				lock();
 				resultImg_ = (isCalibMode_) ? img.clone() : gray_.clone();
 				contourFinder_->findContours(gray_);
 				tracker_->track(contourFinder_->getBoundingRects());
 				circularityCheck();
 				sendTUIOData();
-				unlock();
 				});
-			sleep(2);
+			unlock();
+			Sleep(2);
 		}
 	}
 

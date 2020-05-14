@@ -31,12 +31,8 @@ void ofApp::draw() {
 	ofSetBackgroundColor(50, 10, 10);
 	ofSetColor(255);
 
-	fingerTracker_->lock();
-	auto contourFinder = fingerTracker_->ContourFinder();
-	fingerTracker_->getImage(colorImg);
+	fingerTracker_->GetImage(colorImg);
 	colorImg.update();
-	fingerTracker_->unlock();
-
 	colorImg.draw(0, 0);
 
 	fingerTracker_->draw();
