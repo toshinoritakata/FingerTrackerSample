@@ -36,7 +36,6 @@ void ofApp::draw() {
 	colorImg.draw(0, 0);
 
 	fingerTracker_->draw();
-	fingerTracker_->DrawSrcRect();
 
 	// draw FPS
 	ofSetColor(0, 0, 255);

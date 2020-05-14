@@ -20,16 +20,12 @@ public:
 	void setup(const cv::Rect& track) {
 		startedNasent_ = ofGetElapsedTimef();
 
-		color.setHsb(ofRandom(0, 255), 255, 255);
-		cur = ofxCv::toOf(track).getCenter();
-		smooth = cur;
+		smooth = ofxCv::toOf(track).getCenter();
 		state_ = NASENT;
 		trail_.clear();
 	}
 
 	void update(const cv::Rect track) {
-		float curTime = ofGetElapsedTimef();
-
 		if (state_ == BORN)
 			state_ = ALIVE;
 
@@ -40,11 +36,13 @@ public:
 			smooth.interpolate(cur, .5);
 
 			trail_.addVertex(smooth);
-			if (trail_.size() > 60)
+			if (trail_.size() > 30)
 				trail_.removeVertex(0);
 		}
 		else if (state_ == NASENT) {
+			float curTime = ofGetElapsedTimef();
 			if (curTime - startedNasent_ > nasentTime_) {
+				color.setHsb(ofRandom(0, 255), 255, 255);
 				state_ = BORN;
 			}
 		}
@@ -146,19 +144,19 @@ private:
 		contourFinder_->setAutoThreshold(true);
 
 		while (isThreadRunning()) {
-			lock();
 			inputCamera_->Grab([this](cv::Mat img) {
-				cv::cvtColor(img, gray_, cv::COLOR_RGB2GRAY);
+				cv::cvtColor(img.clone(), gray_, cv::COLOR_RGB2GRAY);
 				cv::warpPerspective(gray_, gray_, pm_, gray_.size(), cv::INTER_NEAREST);
 				cv::GaussianBlur(gray_, gray_, cv::Size(9, 9), 0, 0);
 
-				resultImg_ = (isCalibMode_) ? img.clone() : gray_.clone();
+				lock();
+				resultImg_ = (isCalibMode_) ? img : gray_.clone();
 				contourFinder_->findContours(gray_);
 				tracker_->track(contourFinder_->getBoundingRects());
 				circularityCheck();
 				sendTUIOData();
+				unlock();
 				});
-			unlock();
 			Sleep(2);
 		}
 	}
@@ -258,7 +256,8 @@ public:
 
 	void draw() {
 		lock();
-		//contourFinder.draw();
+		ofSetColor(255, 0, 0);
+		contourFinder_->draw();
 
 		auto followers = tracker_->getFollowers();
 		for (int i = 0; i < followers.size(); i++) {
@@ -273,12 +272,15 @@ public:
 			auto cp = contourFinder_->getCentroid(i);
 			ofDrawBitmapString(ofToString(label),  cp.x, cp.y);
 
-			vector<cv::Point> poly;
-			auto con = contourFinder_->getContour(i);
-			cv::approxPolyDP(con, poly, 3, true);
-			ofxCv::toOf(poly).draw();
+		//	vector<cv::Point> poly;
+		//	auto con = contourFinder_->getContour(i);
+		//	cv::approxPolyDP(con, poly, 3, true);
+		//	ofxCv::toOf(poly).draw();
 		}
+
 		unlock();
+
+		DrawSrcRect();
 	}
 
 	void reset_rect() {
