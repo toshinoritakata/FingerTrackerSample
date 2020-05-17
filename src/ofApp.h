@@ -45,10 +45,6 @@ public:
 	ofxPanel gui_;
 
 	std::unique_ptr<FingerTracker> fingerTracker_;
-	//FingerTracker* fingerTracker_;
-
-	// camera calibration
-    void calcCameraCalibration(int, int, float);
 
 	// json
 	void saveParam();

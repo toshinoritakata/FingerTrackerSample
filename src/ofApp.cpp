@@ -12,8 +12,8 @@ void ofApp::setup() {
 
 	loadParam();
 
-	//auto inpCam = new MyOptiCam(640, 480);
-	auto inpCam = new MyWebCam(640, 480);
+	auto inpCam = new MyOptiCam(640, 480);
+	//auto inpCam = new MyWebCam(640, 480);
 
 	fingerTracker_->StartInputCamera(inpCam);
 	fingerTracker_->startThread(true);
@@ -51,7 +51,7 @@ void ofApp::exit() {
 }
 
 //--------------------------------------------------------------
-void ofApp::keyPressed(int key){
+void ofApp::keyPressed(int key) {
 	if (key == ' ') {
 		if (fingerTracker_->IsCalibMode()) {
 			fingerTracker_->ExitCalibMode();
@@ -60,6 +60,7 @@ void ofApp::keyPressed(int key){
 			fingerTracker_->EnterCalibMode();
 		}
 		saveParam();
+
 	}
 }
 

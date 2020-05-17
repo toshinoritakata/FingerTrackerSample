@@ -15,7 +15,7 @@ public:
 		startedDying_(0),
 		startedNasent_(0),
 		dyingTime_(1),
-		nasentTime_(0.5) { }
+		nasentTime_(0.5) {}
 
 	void setup(const cv::Rect& track) {
 		startedNasent_ = ofGetElapsedTimef();
@@ -55,20 +55,22 @@ public:
 				startedDying_ = curTime;
 			}
 			else if (curTime - startedDying_ > dyingTime_) {
-				dead = true;
+				//dead = true;
 				state_ = DEAD;
-				trail_.clear();
+				//trail_.clear();
 			}
 		}
 		else {
-			dead = true;
+			//dead = true;
 			state_ = DEAD;
 		}
 	}
-
-	void terminate() {
+	
+	void terminate()
+	{
 		dead = true;
 		state_ = DEAD;
+		trail_.clear();
 	}
 
 	void draw() {
@@ -80,7 +82,7 @@ public:
 		ofPushStyle();
 
 		float size = 16;
-		ofSetColor(0, 255, 0);
+		ofSetColor(0, 0, 255);
 
 		if (startedDying_) {
 			ofSetColor(ofColor::red);
@@ -88,10 +90,33 @@ public:
 		}
 
 		ofNoFill();
+		auto label = this->getLabel();
+		ofSeedRandom(label << 24);
+		ofSetColor(ofColor::fromHsb(ofRandom(255), 255, 255));
+
 		ofDrawCircle(cur, size);
-		ofSetColor(color);
+		ofDrawBitmapString(ofToString(label), cur.x, cur.y);
+
+		ofSetColor(0, 255, 255);
+		switch (state_)
+		{
+		case FingerFollower::NASENT:
+			ofDrawBitmapString("NASENT", cur.x, cur.y-10);
+			break;
+		case FingerFollower::BORN:
+			ofDrawBitmapString("BORN", cur.x, cur.y-10);
+			break;
+		case FingerFollower::ALIVE:
+			ofDrawBitmapString("ALIVE", cur.x, cur.y-10);
+			break;
+		case FingerFollower::DEAD:
+			ofDrawBitmapString("DEAD", cur.x, cur.y-10);
+			break;
+		default:
+			break;
+		}
+
 		trail_.draw();
-		ofSetColor(255, 0, 0);
 		ofPopStyle();
 	}
 };
@@ -104,8 +129,7 @@ public:
 		: pm_(cv::Mat::eye(3, 3, CV_32F)),
 		isCalibMode_(false),
 		inputCamera_(NULL),
-		pickOffset_(ofVec2f(0, 0)),
-		circularity_(0.25)
+		pickOffset_(ofVec2f(0, 0))
 	{
 		tuioServer_ = std::make_unique<TUIO::TuioServer>();
 		contourFinder_ = std::make_unique<ofxCv::ContourFinder>();
@@ -138,6 +162,18 @@ public:
 		unlock();
 	}
 
+	void Gamma(cv::Mat src, cv::Mat dst, double gamma)
+	{
+		uchar LUT[256];
+		for (int i = 0; i < 256; i++) {
+			LUT[i] = (int)(pow((double)i / 255.0, gamma) * 255.0);
+		}
+
+		cv::Mat lut_mat = cv::Mat(1, 256, CV_8UC1, LUT);
+
+		cv::LUT(src, lut_mat, dst);
+	}
+
 private:
 	void FingerTracker::threadedFunction()
 	{
@@ -147,13 +183,14 @@ private:
 			inputCamera_->Grab([this](cv::Mat img) {
 				cv::cvtColor(img.clone(), gray_, cv::COLOR_RGB2GRAY);
 				cv::warpPerspective(gray_, gray_, pm_, gray_.size(), cv::INTER_NEAREST);
+				cv::resize(gray_, gray_, cv::Size(640/2, 480/2), 0, 0, 0);
 				cv::GaussianBlur(gray_, gray_, cv::Size(9, 9), 0, 0);
+				Gamma(gray_, gray_, 10);
 
 				lock();
 				resultImg_ = (isCalibMode_) ? img : gray_.clone();
 				contourFinder_->findContours(gray_);
 				tracker_->track(contourFinder_->getBoundingRects());
-				circularityCheck();
 				sendTUIOData();
 				unlock();
 				});
@@ -161,17 +198,6 @@ private:
 		}
 	}
 
-	void circularityCheck() {
-		filteredIDs_.clear();
-		for (int i = 0; i < tracker_->getCurrentLabels().size(); i++) {
-			auto arc = contourFinder_->getArcLength(i);
-			auto area = contourFinder_->getContourArea(i);
-			auto circularity = 4 * M_PI * area / (arc * arc);
-			if (circularity > circularity_) {
-				filteredIDs_.push_back(i); 
-			} 
-		}
-	}
 
 	void sendTUIOData()
 	{
@@ -180,8 +206,9 @@ private:
 		{
 			auto label = follower.getLabel();
 			auto center = follower.smooth;
-			center.x /= 640;
-			center.y /= 480;
+
+			center.x /= (640/2);
+			center.y /= (480/2);
 			switch (follower.state_)
 			{
 			case FingerFollower::BORN:
@@ -192,17 +219,15 @@ private:
 				tuioServer_->updateTuioCursor(cursors_[label], center.x, center.y);
 				break;
 
+			case FingerFollower::DEAD:
+				tuioServer_->removeTuioCursor(cursors_[label]);
+				follower.terminate();
+				cursors_.erase(label);
+				break;
+
 			default:
 				break;
 			}
-		}
-
-		const auto deadLabels = tracker_->getDeadLabels();
-		for (size_t i = 0; i < deadLabels.size(); i++)
-		{
-			auto label = deadLabels[i];
-			tuioServer_->removeTuioCursor(cursors_[label]);
-			cursors_.erase(label);
 		}
 
 		tuioServer_->commitFrame();
@@ -213,10 +238,6 @@ public:
 		lock();
 		inputCamera_->SetExposure(arg);
 		unlock();
-	}
-
-	void SetCircularity(float arg) {
-		circularity_ = arg;
 	}
 
 	void EnterCalibMode() { 
@@ -255,32 +276,16 @@ public:
 	}
 
 	void draw() {
+		DrawSrcRect();
+
 		lock();
 		ofSetColor(255, 0, 0);
 		contourFinder_->draw();
 
-		auto followers = tracker_->getFollowers();
-		for (int i = 0; i < followers.size(); i++) {
-			followers[i].draw();
+		for each (auto follower in  tracker_->getFollowers()) {
+			follower.draw();
 		}
-
-		for each (auto i in filteredIDs_)
-		{
-			auto label = contourFinder_->getLabel(i);
-			ofSeedRandom(label << 24);
-			ofSetColor(ofColor::fromHsb(ofRandom(255), 255, 255));
-			auto cp = contourFinder_->getCentroid(i);
-			ofDrawBitmapString(ofToString(label),  cp.x, cp.y);
-
-		//	vector<cv::Point> poly;
-		//	auto con = contourFinder_->getContour(i);
-		//	cv::approxPolyDP(con, poly, 3, true);
-		//	ofxCv::toOf(poly).draw();
-		}
-
 		unlock();
-
-		DrawSrcRect();
 	}
 
 	void reset_rect() {
@@ -368,7 +373,6 @@ public:
 
 
 private:
-	std::vector<int> filteredIDs_;
 	int threshold_;
 	int minAreaRadius_;
 	int maxAreaRadius_;
@@ -377,8 +381,8 @@ private:
 	bool isCalibMode_;
 	cv::Mat img_;
 	cv::Mat gray_;
+	cv::Mat bg_;
 	ofVec2f pickOffset_;
-	float circularity_;
 	int picked_;
 
 	MyCamBase* inputCamera_;

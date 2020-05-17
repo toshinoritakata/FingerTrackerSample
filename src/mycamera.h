@@ -30,6 +30,7 @@ public:
 		//// Range for video setting 4: Min:0 Max:6 SteppingDelta:1 Default:2 Flags:2
 		//long lmin, lmax, lsd, lc, lf, ldv;
 		//VI.getVideoSettingFilter(deviceId, VI.propExposure, lmin, lmax, lsd, lc, lf, ldv);
+		//VI.getVideoSettingFilter(deviceId, VI.propContrast, lmin, lmax, lsd, lc, lf, ldv);
 	}
 
 	void Stop() {
@@ -46,7 +47,7 @@ public:
 
 private:
 	videoInput VI;
-	int deviceId = 1;
+	int deviceId = 0;
 };
 
 // OptiCam
